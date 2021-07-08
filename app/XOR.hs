@@ -1,4 +1,4 @@
-module XOR where
+module Main where
 
 import System.Random (newStdGen)
 import Util.MonadRandom (runRandom)
