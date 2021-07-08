@@ -10,7 +10,7 @@ ghc-options: -Wall -threaded -O2
 library:
   exposed-modules:
     - ML.NeuralNet
-    - ML.Neuron
+    - ML.Perceptron
     - Util.MonadRandom
   source-dirs: 
     - src
@@ -20,4 +20,4 @@ executables:
     main: XOR.hs
     source-dirs: app
     dependencies:
-      - perceptron
+      - haskell-artificial-neural-net
