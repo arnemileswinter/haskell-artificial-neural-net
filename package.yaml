@@ -1,0 +1,23 @@
+name: haskell-artificial-neural-net
+version: 0.1.0.0
+
+dependencies:
+  - base >= 4.7 && < 5
+  - random
+
+ghc-options: -Wall -threaded -O2
+
+library:
+  exposed-modules:
+    - ML.NeuralNet
+    - ML.Neuron
+    - Util.MonadRandom
+  source-dirs: 
+    - src
+
+executables:
+  xor:
+    main: XOR.hs
+    source-dirs: app
+    dependencies:
+      - perceptron
