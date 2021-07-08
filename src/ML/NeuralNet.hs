@@ -62,9 +62,7 @@ neuronPayload (Layer _ neurons) = map (\(Neuron p _) -> p) neurons
 
 outboundWeights :: Layer a -> Layer b -> [[Float]]
 outboundWeights (Layer _ curNeurons) (Layer _ nextNeurons) =
-        map (\(idx,_) ->
-                map (\(Neuron _ ws) -> ws!!idx) nextNeurons
-        ) $ zip [1..] curNeurons
+        zipWith (\ idx _y -> map (\ (Neuron _ ws) -> ws !! idx) nextNeurons) [1..] curNeurons
 
 feed :: NeuralNet () -> [[Float]] -> NeuralNet (NetInput,Activation)
 feed net input = let
@@ -86,8 +84,8 @@ feed net input = let
                                                           ) ws
                                               ) neurons
                                   in (activations l, ls++[l])
-                                  ) 
-                                  (activations inputLayer',[]) 
+                                  )
+                                  (activations inputLayer',[])
                                   (reverse $ neuralNetHiddenLayers net)
          Layer outActF outNeurons = neuralNetOutputLayer net
          outputLayer' = Layer outActF
@@ -116,8 +114,8 @@ train net inputs desiredOutputs =
                                          )
                                outNeurons
                                desiredOutputs
-            deltaHiddenLayers = 
-                    snd 
+            deltaHiddenLayers =
+                    snd
                     $ foldr (\hiddenLayer@(Layer actF neurons) (nextLayer,ls) ->
                                 let nextDeltas = deltas nextLayer
                                     outboundWs = outboundWeights hiddenLayer nextLayer
@@ -128,7 +126,7 @@ train net inputs desiredOutputs =
                              )
                              (deltaOutputLayer,[])
                              (neuralNetHiddenLayers net')
-            outputDeltaWeights = 
+            outputDeltaWeights =
                     Layer outActF
                           $ map (\(Neuron (Delta d,_) ws) ->
                                 Neuron (map (DeltaWeight . (*d))
@@ -139,7 +137,7 @@ train net inputs desiredOutputs =
                                         )) ws
                                 )
                                 (layerNeurons deltaOutputLayer)
-            hiddenDeltaWeights = 
+            hiddenDeltaWeights =
                     snd
                     $ foldr (\(Layer actF neurons) (prevLayers,ls) ->
                                 (init prevLayers
@@ -164,9 +162,9 @@ train net inputs desiredOutputs =
                     }
 
 predict :: NeuralNet () -> [[Float]] -> [Float]
-predict net inputs = map unActivation 
-                   $ activations 
-                   $ neuralNetOutputLayer 
+predict net inputs = map unActivation
+                   $ activations
+                   $ neuralNetOutputLayer
                    $ feed net inputs
 
 applyDeltaWeight :: Layer [DeltaWeight] -> Layer ()
