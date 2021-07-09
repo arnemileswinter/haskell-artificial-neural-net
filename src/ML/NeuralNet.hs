@@ -1,7 +1,7 @@
 module ML.NeuralNet
 (newNeuralNet
+,newNeuralNetIO
 ,NeuralNet
-,makeNeuralNet
 ,ActivationFunction(..)
 ,predict
 ,train'
@@ -23,55 +23,75 @@ data Neuron a = Neuron a [Float] deriving (Show,Read)
 data ActivationFunction = Sigmoid
                         | ReLU
                         | Identity
-                   deriving (Show,Read)
+                          deriving (Show,Read)
 data Layer a = Layer {layerActivationFunction::ActivationFunction
-                   ,layerNeurons::[Neuron a]
-                   }
-                   deriving (Show,Read)
+                     ,layerNeurons::[Neuron a]
+                     }
+               deriving (Show,Read)
 data NeuralNet a = NeuralNet {neuralNetLearningRate::Float
-                           ,neuralNetInputLayer::Layer a
-                           ,neuralNetHiddenLayers::[Layer a]
-                           ,neuralNetOutputLayer::Layer a
-                           }
+                             ,neuralNetInputLayer::Layer a
+                             ,neuralNetHiddenLayers::[Layer a]
+                             ,neuralNetOutputLayer::Layer a
+                             }
                    deriving (Show,Read)
-vmult :: [Float] -> [Float] -> Float
-vmult (a:as) (b:bs) = a*b + vmult as bs
-vmult [] [] = 0
-vmult [] bs = error $ "vmult length mismatch. got too many bs, namely " <> show bs
-vmult as [] = error $ "vmult product length mismatch. got too many as, namely " <> show as
 
+-- | Summation of component-wise multiplications of two vectors.
+sumMults :: [Float] -> [Float] -> Float
+sumMults (a:as) (b:bs) = a*b + as `sumMults` bs
+sumMults [] [] = 0
+sumMults [] bs = error $ "sumMults length mismatch. got too many bs, namely " <> show bs
+sumMults as [] = error $ "sumMults product length mismatch. got too many as, namely " <> show as
+
+-- | Apply the activation function
 activate :: ActivationFunction -> Float -> Float
 activate Sigmoid x = 1 / (1 + exp 1 ** (-x))
 activate ReLU x = if x < 0 then 0 else x
 activate Identity x = x
 
+-- | Apply the derivative of an activation function to a net input
 activate' :: ActivationFunction -> Float -> Float
-activate' Sigmoid x = (1 / (1 + exp 1 ** (-x))) * (1 - 1 / (1 + exp 1 ** (-x)))
+activate' Sigmoid x = activate Sigmoid x * (1 - activate Sigmoid x)
 activate' ReLU x = if x < 0 then 0 else 1
 activate' Identity _ = 1
 
-activations :: Layer (a,Activation) -> [Activation]
-activations (Layer _ neurons) = map (\(Neuron (_,a) _) -> a) neurons
-
-layerActivations :: Layer (a,Activation) -> Layer Activation
-layerActivations (Layer actF neurons) = Layer actF $ map (\(Neuron (_,a) ws) -> Neuron a ws) neurons
-
-deltas :: Layer (Delta,Activation) -> [Delta]
-deltas (Layer _ neurons) = map (\(Neuron (d,_) _) -> d) neurons
-
+{-#INLINE neuronPayload#-}
+-- | Fetch whatever data was stored alongside a neuron from a previous step.
 neuronPayload :: Layer a -> [a]
 neuronPayload (Layer _ neurons) = map (\(Neuron p _) -> p) neurons
 
+{-#INLINE activations#-}
+-- | Fetch activations calculated for a layer.
+activations :: Layer (a,Activation) -> [Activation]
+activations l = map snd $ neuronPayload l
+
+{-#INLINE deltas #-}
+-- | Fetch deltas calculated for a layer.
+deltas :: Layer (Delta,Activation) -> [Delta]
+deltas l = map fst $ neuronPayload l
+
+{-#INLINE layerActivations#-}
+-- | Fetch a list of a layer's neuron's activations.
+layerActivations :: Layer (a,Activation) -> Layer Activation
+layerActivations (Layer actF neurons) = Layer actF $ map (\(Neuron (_,a) ws) -> Neuron a ws) neurons
+
+{-#INLINE outboundWeights#-}
+-- | Maps neurons to their outbound weights. 
+--   Note that this should not be invoked on the output layer,
+--   because their neurons have no outbound weights.
 outboundWeights :: Layer a -> Layer b -> [[Float]]
 outboundWeights (Layer _ curNeurons) (Layer _ nextNeurons) =
         zipWith (\ idx _y -> map (\ (Neuron _ ws) -> ws !! idx) nextNeurons) [1..(length curNeurons)] curNeurons -- start at index 1 so that bias weights are disregarded.
 
+
+-- | Forward propagation of inputs.
+--   Used together with `train` because it saves previous activations 
+--   and net inputs which are required to calculate the deltas and derivatives.
 feed :: NeuralNet () -> [[Float]] -> NeuralNet (NetInput,Activation)
 feed net input = let
          Layer inActF inNeurons = neuralNetInputLayer net
          inputLayer' = Layer inActF
                         $ zipWith (\(Neuron _ ws) is ->
-                                    let z = ws `vmult` is
+                                    let z = ws `sumMults` is
                                     in Neuron (NetInput z
                                               ,Activation $ activate inActF z
                                               ) ws
@@ -80,7 +100,7 @@ feed net input = let
                          $ foldr (\(Layer actF neurons) (lastActivations,ls)->
                                   let l = Layer actF
                                         $ map (\(Neuron _ ws) ->
-                                                let z = ws `vmult` (1:map unActivation lastActivations) -- prepend 1 for bias
+                                                let z = ws `sumMults` (1:map unActivation lastActivations) -- prepend 1 for bias
                                                 in Neuron (NetInput z
                                                           ,Activation $ activate actF z
                                                           ) ws
@@ -92,7 +112,7 @@ feed net input = let
          Layer outActF outNeurons = neuralNetOutputLayer net
          outputLayer' = Layer outActF
                         $ map (\(Neuron _ ws) ->
-                                let z = ws `vmult` (1:map unActivation (activations $ last (inputLayer':hiddenLayers'))) -- prepend 1 for bias
+                                let z = ws `sumMults` (1:map unActivation (activations $ last (inputLayer':hiddenLayers'))) -- prepend 1 for bias
                                 in Neuron (NetInput z, Activation $ activate outActF z) ws
                               ) outNeurons
         in
@@ -102,17 +122,21 @@ feed net input = let
                   ,neuralNetOutputLayer=outputLayer'
                   }
 
+-- | Batch train a neural net.
 train' :: NeuralNet () -> [([[Float]], [Float])] -> NeuralNet ()
 train' = foldl' (\net' (inputs,output) -> train net' inputs output)
 
+-- | Trains a given neural net such that the neuron's weights change.
 train :: NeuralNet () -> [[Float]] -> [Float] -> NeuralNet ()
 train net inputs desiredOutputs =
         let net' = feed net inputs
             learningRate = neuralNetLearningRate net
             inputLayer = neuralNetInputLayer net'
             Layer outActF outNeurons = neuralNetOutputLayer net'
-            deltaOutputLayer = Layer outActF $ zipWith (\(Neuron (NetInput netInput, actual) ws) desired ->
-                                          Neuron (Delta $ activate' outActF netInput * (desired - unActivation actual), actual) ws
+            deltaOutputLayer = Layer outActF $ zipWith (\(Neuron (NetInput netInput, actual) ws) desired -> 
+                                                                  Neuron (Delta $ activate' outActF netInput * (desired - unActivation actual)
+                                                                         ,actual
+                                                                         ) ws
                                          )
                                outNeurons
                                desiredOutputs
@@ -122,7 +146,9 @@ train net inputs desiredOutputs =
                                 let nextDeltas = deltas nextLayer
                                     outboundWs = outboundWeights hiddenLayer nextLayer
                                     hiddenLayer' = Layer actF $ zipWith (\(Neuron (NetInput netInput, a) ws) ws' ->
-                                        Neuron (Delta $ activate' actF netInput * (map unDelta nextDeltas) `vmult` ws', a) ws
+                                                    Neuron (Delta $ activate' actF netInput * (map unDelta nextDeltas) `sumMults` ws'
+                                                           ,a
+                                                           ) ws
                                         ) neurons outboundWs
                                 in (hiddenLayer',hiddenLayer':ls)
                              )
@@ -163,12 +189,15 @@ train net inputs desiredOutputs =
                     ,neuralNetOutputLayer=outputLayer'
                     }
 
+-- | Use a trained neural net to classify the input.
 predict :: NeuralNet () -> [[Float]] -> [Float]
 predict net inputs = map unActivation
                    $ activations
                    $ neuralNetOutputLayer
                    $ feed net inputs
 
+-- | Apply previously found delta-weights to the neurons current weights.
+--   Final step of backpropagation.
 applyDeltaWeight :: Layer [DeltaWeight] -> Layer ()
 applyDeltaWeight (Layer actF neurons) =
         Layer actF
@@ -202,17 +231,18 @@ newNeuralNet learningRate
                            ,neuralNetHiddenLayers=hiddenlayers
                            }
 
-makeNeuralNet :: Float
+-- | same as `newNeuralNet` but doesn't require you to use MonadRandom.
+newNeuralNetIO :: Float
               -> Int
               -> Int
               -> [(ActivationFunction, Int)]
               -> (ActivationFunction, Int)
               -> IO (NeuralNet ())
-makeNeuralNet learningRate
-             inputs
-             inSize
-             hiddenDesc
-             outDesc = do
+newNeuralNetIO learningRate
+               inputs
+               inSize
+               hiddenDesc
+               outDesc = do
         g <- newStdGen
         pure $ fst
              $ runRandom g
