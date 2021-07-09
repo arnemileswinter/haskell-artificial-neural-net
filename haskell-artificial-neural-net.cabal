@@ -6,7 +6,16 @@ cabal-version: 1.12
 
 name:           haskell-artificial-neural-net
 version:        0.1.0.0
+synopsis:       Implementation of an artificial neural net and the perceptron algorithm in haskell.
+category:       Development
+homepage:       https://github.com/arnemileswinter/haskell-artificial-neural-net#readme
+bug-reports:    https://github.com/arnemileswinter/haskell-artificial-neural-net/issues
+maintainer:     Arne Winter
 build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/arnemileswinter/haskell-artificial-neural-net
 
 library
   exposed-modules:

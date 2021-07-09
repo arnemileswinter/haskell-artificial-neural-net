@@ -1,5 +1,9 @@
 name: haskell-artificial-neural-net
 version: 0.1.0.0
+synopsis: Implementation of an artificial neural net and the perceptron algorithm in haskell.
+maintainer: Arne Winter
+github: arnemileswinter/haskell-artificial-neural-net
+category: Development
 
 dependencies:
   - base >= 4.7 && < 5
