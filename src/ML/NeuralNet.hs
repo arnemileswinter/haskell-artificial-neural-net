@@ -14,26 +14,43 @@ import System.Random (RandomGen, newStdGen)
 import Control.Monad (replicateM, foldM)
 import Data.List (foldl')
 
-newtype Activation = Activation {unActivation::Float} deriving Show
-newtype NetInput = NetInput Float deriving Show
-newtype Delta = Delta {unDelta::Float} deriving Show
-newtype DeltaWeight = DeltaWeight {unDeltaWeight::Float} deriving Show
 
-data Neuron a = Neuron a [Float] deriving (Show,Read)
-data ActivationFunction = Sigmoid
+-- | The activation functions that are used on a layer.
+data ActivationFunction = Logistic
                         | ReLU
                         | Identity
                           deriving (Show,Read)
-data Layer a = Layer {layerActivationFunction::ActivationFunction
-                     ,layerNeurons::[Neuron a]
-                     }
-               deriving (Show,Read)
+-- | A neural net
 data NeuralNet a = NeuralNet {neuralNetLearningRate::Float
                              ,neuralNetInputLayer::Layer a
                              ,neuralNetHiddenLayers::[Layer a]
                              ,neuralNetOutputLayer::Layer a
                              }
                    deriving (Show,Read)
+-- | A single neuron inside a layer that has inbound weights. For the input layer, these are all ones.
+data Neuron a = Neuron a [Float] deriving (Show,Read)
+
+-- | A single layer in a neural net, holding neurons and an activation function.
+data Layer a = Layer {layerActivationFunction::ActivationFunction
+                     ,layerNeurons::[Neuron a]
+                     }
+               deriving (Show,Read)
+
+-- | Net input is the summation of component-wise multiplication of the input vectors according to the inbound weights.
+newtype NetInput = NetInput Float deriving Show
+-- | An activation is what the neurons provide to the next layer (or output). It is calculated by applying the activation function on the NetInput.
+newtype Activation = Activation {unActivation::Float} deriving Show
+-- | A delta is is calculated per neuron in the backpropagation step.
+--   In the output layer, it is the application of the activation function's derivative with the net-input,
+--      multiplied by the desired outcome minus the actual outcome.
+--   In hidden layers, it is the aforementioned derivative value multiplied by the summation of 
+--      pairwise multiplication of the neurons outbound weights and the next layer's delta.
+newtype Delta = Delta {unDelta::Float} deriving Show
+-- | DeltaWeight is the change of weight to add to each neuron's weights in the last step of propagating backwards.
+--   It is calculated by the learning-rate times the 
+--      summation of component-wise multiplication of the current layer's deltas and the previous layer's activations
+newtype DeltaWeight = DeltaWeight {unDeltaWeight::Float} deriving Show
+
 
 -- | Summation of component-wise multiplications of two vectors.
 sumMults :: [Float] -> [Float] -> Float
@@ -44,13 +61,13 @@ sumMults as [] = error $ "sumMults product length mismatch. got too many as, nam
 
 -- | Apply the activation function
 activate :: ActivationFunction -> Float -> Float
-activate Sigmoid x = 1 / (1 + exp 1 ** (-x))
+activate Logistic x = 1 / (1 + exp 1 ** (-x))
 activate ReLU x = if x < 0 then 0 else x
 activate Identity x = x
 
 -- | Apply the derivative of an activation function to a net input
 activate' :: ActivationFunction -> Float -> Float
-activate' Sigmoid x = activate Sigmoid x * (1 - activate Sigmoid x)
+activate' Logistic x = activate Logistic  x * (1 - activate Logistic x)
 activate' ReLU x = if x < 0 then 0 else 1
 activate' Identity _ = 1
 
@@ -159,8 +176,10 @@ train net inputs desiredOutputs =
                           $ map (\(Neuron (Delta d,_) ws) ->
                                 Neuron (map (DeltaWeight . (*d))
                                         (1 -- one for bias
+                                        -- in case there are no hidden layers,
+                                        --    the input layer is the previous layer to the output layer.
                                         :if null deltaHiddenLayers
-                                            then map unActivation $ activations inputLayer
+                                            then map unActivation $ activations inputLayer 
                                             else map unActivation $ activations $ last deltaHiddenLayers
                                         )) ws
                                 )
@@ -205,6 +224,7 @@ applyDeltaWeight (Layer actF neurons) =
                         Neuron () (zipWith (+) ws (map unDeltaWeight deltaWeights))
                     ) neurons
 
+-- | Creates a neural net with random weights.
 newNeuralNet :: RandomGen g =>
                 Float                          -- ^ The network's learning rate.
                 -> Int                         -- ^ number of inputs for each input layer neuron.
