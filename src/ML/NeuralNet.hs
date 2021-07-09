@@ -8,12 +8,10 @@ module ML.NeuralNet
 ,train
 ) where
 
-
 import Util.MonadRandom (MonadRandom, getRandomRs, runRandom)
 import System.Random (RandomGen, newStdGen)
 import Control.Monad (replicateM, foldM)
 import Data.List (foldl')
-
 
 -- | The activation functions that are used on a layer.
 data ActivationFunction = Logistic
@@ -29,7 +27,6 @@ data NeuralNet a = NeuralNet {neuralNetLearningRate::Float
                    deriving (Show,Read)
 -- | A single neuron inside a layer that has inbound weights. For the input layer, these are all ones.
 data Neuron a = Neuron a [Float] deriving (Show,Read)
-
 -- | A single layer in a neural net, holding neurons and an activation function.
 data Layer a = Layer {layerActivationFunction::ActivationFunction
                      ,layerNeurons::[Neuron a]
@@ -40,7 +37,7 @@ data Layer a = Layer {layerActivationFunction::ActivationFunction
 newtype NetInput = NetInput Float deriving Show
 -- | An activation is what the neurons provide to the next layer (or output). It is calculated by applying the activation function on the NetInput.
 newtype Activation = Activation {unActivation::Float} deriving Show
--- | A delta is is calculated per neuron in the backpropagation step.
+-- | A delta is calculated per neuron in the backpropagation step.
 --   In the output layer, it is the application of the activation function's derivative with the net-input,
 --      multiplied by the desired outcome minus the actual outcome.
 --   In hidden layers, it is the aforementioned derivative value multiplied by the summation of 
