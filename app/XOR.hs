@@ -8,7 +8,7 @@ main :: IO ()
 main = do
      g <- newStdGen
      -- get a NeuralNet
-     let (n, _) = runRandom g $ newNeuralNet (0.3)         -- Learning rate is 0.3
+     let (n, _) = runRandom g $ newNeuralNet (0.3)          -- Learning rate is 0.3
                                               1             -- There is one incoming edge for each input neuron. 
                                               2             -- There are 2 input neurons
                                               [(ReLU, 5)]   -- There is a single hidden layer with the ReLU activation and 5 neurons
