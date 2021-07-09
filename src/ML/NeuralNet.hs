@@ -1,5 +1,6 @@
 module ML.NeuralNet
 (newNeuralNet
+,NeuralNet
 ,makeNeuralNet
 ,ActivationFunction(..)
 ,predict
@@ -11,6 +12,7 @@ module ML.NeuralNet
 import Util.MonadRandom (MonadRandom, getRandomRs, runRandom)
 import System.Random (RandomGen, newStdGen)
 import Control.Monad (replicateM, foldM)
+import Data.List (foldl')
 
 newtype Activation = Activation {unActivation::Float} deriving Show
 newtype NetInput = NetInput Float deriving Show
@@ -31,7 +33,7 @@ data NeuralNet a = NeuralNet {neuralNetLearningRate::Float
                            ,neuralNetHiddenLayers::[Layer a]
                            ,neuralNetOutputLayer::Layer a
                            }
-                   deriving Show
+                   deriving (Show,Read)
 vmult :: [Float] -> [Float] -> Float
 vmult (a:as) (b:bs) = a*b + vmult as bs
 vmult [] [] = 0
@@ -62,7 +64,7 @@ neuronPayload (Layer _ neurons) = map (\(Neuron p _) -> p) neurons
 
 outboundWeights :: Layer a -> Layer b -> [[Float]]
 outboundWeights (Layer _ curNeurons) (Layer _ nextNeurons) =
-        zipWith (\ idx _y -> map (\ (Neuron _ ws) -> ws !! idx) nextNeurons) [1..] curNeurons
+        zipWith (\ idx _y -> map (\ (Neuron _ ws) -> ws !! idx) nextNeurons) [1..(length curNeurons)] curNeurons -- start at index 1 so that bias weights are disregarded.
 
 feed :: NeuralNet () -> [[Float]] -> NeuralNet (NetInput,Activation)
 feed net input = let
@@ -101,7 +103,7 @@ feed net input = let
                   }
 
 train' :: NeuralNet () -> [([[Float]], [Float])] -> NeuralNet ()
-train' = foldr (\(inputs,output) net' -> train net' inputs output)
+train' = foldl' (\net' (inputs,output) -> train net' inputs output)
 
 train :: NeuralNet () -> [[Float]] -> [Float] -> NeuralNet ()
 train net inputs desiredOutputs =
@@ -190,7 +192,7 @@ newNeuralNet learningRate
         let inputNeurons = replicate inSize $ Neuron () $ replicate inputs 1
         let inputLayer = inputNeurons
         outputNeurons <- replicateM outSize $ Neuron () <$> getRandomRs (0.0,1.0) (last (inSize:map snd hiddenDesc) + 1) -- one added for bias weight.
-        hiddenlayers <- (reverse.snd) <$> foldM (\(prevSize,ls) (actF,curSize) -> do
+        hiddenlayers <- reverse.snd <$> foldM (\(prevSize,ls) (actF,curSize) -> do
                                 neurons <- replicateM curSize $ Neuron () <$> getRandomRs (0.0,1.0) (prevSize + 1) -- one added for bias weight.
                                 pure (curSize, Layer actF neurons:ls)
                 ) (inSize,[]) hiddenDesc
