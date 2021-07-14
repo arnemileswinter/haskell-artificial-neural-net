@@ -1,3 +1,7 @@
+# Custom
+out/
+
+# From gitignore haskell template
 dist
 dist-*
 cabal-dev

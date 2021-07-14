@@ -22,6 +22,14 @@ library:
 executables:
   xor:
     main: XOR.hs
-    source-dirs: app
+    source-dirs: app/xor
     dependencies:
       - haskell-artificial-neural-net
+  mnist:
+    main: MNist.hs
+    source-dirs: app/mnist
+    dependencies:
+      - haskell-artificial-neural-net
+      - binary
+      - bytestring
+      - filepath
