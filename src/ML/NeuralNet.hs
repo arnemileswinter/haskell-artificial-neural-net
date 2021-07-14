@@ -100,14 +100,13 @@ outboundWeights (Layer _ curNeurons) (Layer _ nextNeurons) =
 -- | Forward propagation of inputs.
 --   Used together with `train` because it saves previous activations 
 --   and net inputs which are required to calculate the deltas and derivatives.
-feed :: NeuralNet () -> [[Float]] -> NeuralNet (NetInput,Activation)
+feed :: NeuralNet () -> [Float] -> NeuralNet (NetInput,Activation)
 feed net input = let
          Layer inActF inNeurons = neuralNetInputLayer net
          inputLayer' = Layer inActF
                         $ zipWith (\(Neuron _ ws) is ->
-                                    let z = ws `sumMults` is
-                                    in Neuron (NetInput z
-                                              ,Activation $ activate inActF z
+                                        Neuron (NetInput is
+                                              ,Activation is
                                               ) ws
                                   ) inNeurons input
          hiddenLayers' = snd
@@ -137,11 +136,11 @@ feed net input = let
                   }
 
 -- | Batch train a neural net.
-train' :: NeuralNet () -> [([[Float]], [Float])] -> NeuralNet ()
+train' :: NeuralNet () -> [([Float], [Float])] -> NeuralNet ()
 train' = foldl' (\net' (inputs,output) -> train net' inputs output)
 
 -- | Trains a given neural net such that the neuron's weights change.
-train :: NeuralNet () -> [[Float]] -> [Float] -> NeuralNet ()
+train :: NeuralNet () -> [Float] -> [Float] -> NeuralNet ()
 train net inputs desiredOutputs =
         let net' = feed net inputs
             learningRate = neuralNetLearningRate net
@@ -206,7 +205,7 @@ train net inputs desiredOutputs =
                     }
 
 -- | Use a trained neural net to classify the input.
-predict :: NeuralNet () -> [[Float]] -> [Float]
+predict :: NeuralNet () -> [Float] -> [Float]
 predict net inputs = map unActivation
                    $ activations
                    $ neuralNetOutputLayer
@@ -224,18 +223,16 @@ applyDeltaWeight (Layer actF neurons) =
 -- | Creates a neural net with random weights.
 newNeuralNet :: RandomGen g =>
                 Float                          -- ^ The network's learning rate.
-                -> Int                         -- ^ number of inputs for each input layer neuron.
                 -> Int                         -- ^ number of input layer neurons.
                 -> [(ActivationFunction,Int)]  -- ^ descriptions of hidden layers. 
                                                --   Pairings of activation functions and number of neurons.
                 -> (ActivationFunction,Int)    -- ^ Activation function and number of neurons of the output layer.
                 -> MonadRandom g (NeuralNet ())
 newNeuralNet learningRate
-             inputs
              inSize
              hiddenDesc
              (outAct,outSize) = do
-        let inputNeurons = replicate inSize $ Neuron () $ replicate inputs 1
+        let inputNeurons = replicate inSize $ Neuron () []
         let inputLayer = inputNeurons
         outputNeurons <- replicateM outSize $ Neuron () <$> getRandomRs (0.0,1.0) (last (inSize:map snd hiddenDesc) + 1) -- one added for bias weight.
         hiddenlayers <- reverse.snd <$> foldM (\(prevSize,ls) (actF,curSize) -> do
@@ -251,16 +248,14 @@ newNeuralNet learningRate
 -- | same as `newNeuralNet` but doesn't require you to use MonadRandom.
 newNeuralNetIO :: Float
               -> Int
-              -> Int
               -> [(ActivationFunction, Int)]
               -> (ActivationFunction, Int)
               -> IO (NeuralNet ())
 newNeuralNetIO learningRate
-               inputs
                inSize
                hiddenDesc
                outDesc = do
         g <- newStdGen
         pure $ fst
              $ runRandom g
-             $ newNeuralNet learningRate inputs inSize hiddenDesc outDesc
+             $ newNeuralNet learningRate inSize hiddenDesc outDesc
